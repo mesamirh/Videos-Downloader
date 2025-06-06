@@ -1,9 +1,11 @@
 services:
   - type: web
     name: videos-downloader
-    env: node
-    buildCommand: npm install
-    startCommand: node server.js
+    env: docker
+    buildCommand: docker build -t videos-downloader .
+    startCommand: docker run -p $PORT:3000 videos-downloader
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3000

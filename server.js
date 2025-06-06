@@ -19,7 +19,17 @@ const io = new Server(server, {
   },
 });
 
-ytdlp.setBinaryPath("/usr/local/bin/yt-dlp");
+const YT_DLP_PATH =
+  process.env.NODE_ENV === "production"
+    ? "/usr/bin/yt-dlp"
+    : "/usr/local/bin/yt-dlp";
+
+try {
+  ytdlp.setBinaryPath(YT_DLP_PATH);
+} catch (error) {
+  console.error("Error setting yt-dlp binary path:", error);
+  process.exit(1);
+}
 
 const PORT = process.env.PORT || 3000;
 
@@ -67,6 +77,10 @@ app.post("/info", async (req, res) => {
       .status(500)
       .json({ success: false, error: "Failed to fetch video information." });
   }
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
 });
 
 io.on("connection", (socket) => {
