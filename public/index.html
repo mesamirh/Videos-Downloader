@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Videos Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            overflow: hidden;
+        }
+        h1, h2, h3, .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .cosmic-bg {
+            background-color: #000011;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 5s infinite;
+        }
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+        .card {
+            background: rgba(18, 18, 48, 0.6);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(128, 128, 255, 0.2);
+            box-shadow: 0 0 30px rgba(79, 70, 229, 0.3);
+        }
+        .input-glow {
+            transition: all 0.3s ease;
+            box-shadow: 0 0 5px rgba(99, 102, 241, 0);
+        }
+        .input-glow:focus {
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.8);
+        }
+        .btn-glow {
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+        .btn-glow:hover {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 1);
+        }
+        .progress-bar-inner {
+            transition: width 0.4s ease;
+            background: linear-gradient(90deg, #4f46e5, #a855f7);
+            box-shadow: 0 0 10px #a855f7;
+        }
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div id="star-container" class="cosmic-bg"></div>
+
+    <div class="relative min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-3xl mx-auto">
+            <header class="text-center mb-8">
+                <h1 class="text-4xl md:text-5xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Videos Downloader</h1>
+                <p class="text-indigo-300 text-lg">Download Videos from anywhere</p>
+            </header>
+
+            <main id="main-content" class="card rounded-2xl p-6 md:p-8">
+                <!-- URL Input Form -->
+                <div id="url-form">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <input type="text" id="video-url" placeholder="Paste a video URL..." class="input-glow flex-grow bg-black/20 border-2 border-indigo-500/50 rounded-lg py-3 px-4 placeholder-indigo-300/70 focus:outline-none focus:border-indigo-400">
+                        <button id="get-info-btn" class="btn-glow bg-indigo-600 hover:bg-indigo-500 font-bold py-3 px-6 rounded-lg shadow-lg flex items-center justify-center">
+                            <span id="btn-text">Download</span>
+                            <svg id="btn-loader" class="animate-spin h-5 w-5 ml-3 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="status-display" class="mt-6 text-center min-h-[1rem]"></div>
+
+                <!-- Info & Download Section -->
+                <div id="info-section" class="hidden mt-4 fade-in"></div>
+
+                <!-- Progress Section -->
+                <div id="progress-section" class="hidden mt-4 fade-in"></div>
+
+                 <!-- Download Ready Section -->
+                <div id="download-ready" class="hidden mt-6 text-center fade-in"></div>
+
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        // --- Animated Background ---
+        const starContainer = document.getElementById('star-container');
+        for (let i = 0; i < 150; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            const size = Math.random() * 3;
+            star.style.width = `${size}px`;
+            star.style.height = `${size}px`;
+            star.style.top = `${Math.random() * 100}%`;
+            star.style.left = `${Math.random() * 100}%`;
+            star.style.animationDelay = `${Math.random() * 5}s`;
+            star.style.animationDuration = `${Math.random() * 5 + 3}s`;
+            starContainer.appendChild(star);
+        }
+
+        // --- DOM Elements ---
+        const urlInput = document.getElementById('video-url');
+        const getInfoBtn = document.getElementById('get-info-btn');
+        const btnText = document.getElementById('btn-text');
+        const btnLoader = document.getElementById('btn-loader');
+        const statusDisplay = document.getElementById('status-display');
+        const infoSection = document.getElementById('info-section');
+        const progressSection = document.getElementById('progress-section');
+        const downloadReadySection = document.getElementById('download-ready');
+
+        let currentUrlInfo = {};
+
+        // --- Platform Icons SVG ---
+        const platformIcons = {
+            youtube: `<svg ...>...</svg>`, // Add full SVG for each platform icon
+            vimeo: `<svg ...>...</svg>`,
+            twitter: `<svg ...>...</svg>`,
+            // ... Add other icons
+            default: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 inline-block mr-2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`
+        };
+
+        // --- UI Helper Functions ---
+        function showLoader(isLoading) {
+            getInfoBtn.disabled = isLoading;
+            btnLoader.classList.toggle('hidden', !isLoading);
+        }
+
+        function showStatus(message, isError = false) {
+            statusDisplay.innerHTML = `<p class="${isError ? 'text-red-400' : 'text-purple-300'}">${message}</p>`;
+        }
+
+        function clearAllSections() {
+            showStatus('');
+            infoSection.classList.add('hidden');
+            progressSection.classList.add('hidden');
+            downloadReadySection.classList.add('hidden');
+            infoSection.innerHTML = '';
+            progressSection.innerHTML = '';
+            downloadReadySection.innerHTML = '';
+        }
+
+        // --- Event Listener ---
+        getInfoBtn.addEventListener('click', async () => {
+            const url = urlInput.value.trim();
+            if (!url) {
+                showStatus('A cosmic void detected. Please paste a URL.', true);
+                return;
+            }
+            clearAllSections();
+            showLoader(true);
+            showStatus('Analyzing signal...');
+
+            try {
+                const response = await fetch('/info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error);
+
+                currentUrlInfo = { ...data, url }; // Store full info
+                displayInfo(data);
+
+            } catch (err) {
+                showStatus(`Signal lost: ${err.message}`, true);
+            } finally {
+                showLoader(false);
+            }
+        });
+
+        function displayInfo(data) {
+            const { title, thumbnail, duration, isPlaylist, entryCount, platform } = data;
+            showStatus('Signal Acquired. Ready for transport.', false);
+
+            const platformIcon = platformIcons[platform] || platformIcons.default;
+            const downloadButtonText = isPlaylist ? `Download Fleet (${entryCount} Items) as .ZIP` : 'Download Video';
+
+            infoSection.innerHTML = `
+                <div class="flex flex-col md:flex-row gap-6 items-center bg-black/20 p-4 rounded-lg">
+                    <img src="${thumbnail}" alt="Thumbnail" class="w-full md:w-48 h-auto rounded-lg shadow-lg border-2 border-indigo-500/30">
+                    <div class="flex-grow text-center md:text-left">
+                        <h2 class="text-xl font-bold mb-2">${title}</h2>
+                        <div class="text-indigo-300 flex items-center justify-center md:justify-start gap-4">
+                            <span>${platformIcon} ${platform.charAt(0).toUpperCase() + platform.slice(1)}</span>
+                            <span>Duration: ${duration}</span>
+                            ${isPlaylist ? `<span>Items: ${entryCount}</span>` : ''}
+                        </div>
+                        <button id="start-download-btn" class="btn-glow mt-4 bg-purple-600 hover:bg-purple-500 font-bold py-2 px-5 rounded-lg">
+                            ${downloadButtonText}
+                        </button>
+                    </div>
+                </div>
+            `;
+            infoSection.classList.remove('hidden');
+
+            document.getElementById('start-download-btn').addEventListener('click', () => {
+                infoSection.classList.add('hidden');
+                progressSection.classList.remove('hidden');
+                socket.emit('start-download', {
+                    url: currentUrlInfo.url,
+                    isPlaylist: currentUrlInfo.isPlaylist,
+                    entries: currentUrlInfo.entries,
+                    playlistTitle: currentUrlInfo.title
+                });
+            });
+        }
+
+        // --- Socket.IO Event Handlers ---
+        socket.on('video-progress', (data) => {
+            const bar = document.getElementById('video-progress-bar');
+            if (bar) bar.style.width = `${data.percent}%`;
+            const percentText = document.getElementById('video-progress-percent');
+            if(percentText) percentText.textContent = `${data.percent.toFixed(1)}%`;
+        });
+        
+        socket.on('playlist-progress', (data) => {
+            let html = `
+                <h3 class="font-orbitron text-2xl mb-2">${data.message}</h3>
+                <div class="w-full bg-black/20 rounded-full h-2.5 mt-4">
+                    <div id="overall-progress-bar" class="bg-purple-600 h-2.5 rounded-full" style="width: ${data.overallPercent || 0}%"></div>
+                </div>
+                <p class="text-sm text-center mt-2">${data.videoIndex || 0} / ${data.totalVideos || 0} Videos Transferred</p>
+            `;
+             if(data.status === 'video-start') {
+                html += `
+                    <div class="mt-4 border-t border-indigo-500/20 pt-4">
+                        <p class="text-indigo-200">Current transfer progress:</p>
+                        <div class="w-full bg-black/20 rounded-full h-2.5 mt-2">
+                             <div id="video-progress-bar" class="progress-bar-inner h-2.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <p id="video-progress-percent" class="text-sm text-right mt-1">0%</p>
+                    </div>
+                `
+            }
+             progressSection.innerHTML = html;
+        });
+
+        socket.on('zip-ready', (data) => {
+            progressSection.classList.add('hidden');
+            displayDownloadButton(data.filePath, data.fileName, 'Fleet archive is ready.');
+        });
+        
+        socket.on('download-complete', (data) => {
+            progressSection.classList.add('hidden');
+            displayDownloadButton(data.filePath, data.fileName, 'Video transfer complete.');
+        });
+        
+        socket.on('error', (message) => {
+            clearAllSections();
+            showStatus(`Error: ${message}`, true);
+        });
+
+        function displayDownloadButton(filePath, fileName, message) {
+            downloadReadySection.innerHTML = `
+                 <h3 class="text-2xl font-semibold text-green-400 mb-4 font-orbitron">${message}</h3>
+                 <a href="${filePath}" download="${fileName}" class="inline-block bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-8 rounded-lg transition duration-300 btn-glow">
+                    Download Now
+                 </a>
+            `;
+            downloadReadySection.classList.remove('hidden');
+        }
+
+    </script>
+</body>
+</html>

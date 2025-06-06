@@ -1,0 +1,30 @@
+{
+  "name": "videos-downloader",
+  "version": "3.0.0",
+  "description": "An advanced web-based universal video downloader with playlist and ZIP support.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "video",
+    "downloader",
+    "youtube",
+    "ytdlp",
+    "playlist",
+    "zip"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "ytdlp-nodejs": "^2.3.0",
+    "socket.io": "^4.7.5",
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
